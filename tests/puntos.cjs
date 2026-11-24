@@ -1,0 +1,19 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
+class El{constructor(){this.children=[];this.attrs={};this.style={};this.dataset={};this.value='researcher';this.classList={add(){},remove(){}}}setAttribute(k,v){this.attrs[k]=v}append(e){this.children.push(e)}replaceChildren(){this.children=[]}insertAdjacentHTML(){}focus(){}set innerHTML(v){this.html=v}get innerHTML(){return this.html}}
+const els={},store={'punto-magico-v1':'[0,1,2]'},events=[];const c={document:{getElementById:id=>els[id]??=new El(),createElement:()=>new El(),createElementNS:()=>new El()},localStorage:{getItem:k=>store[k],setItem:(k,v)=>store[k]=v},window:{dispatchEvent:e=>events.push(e)},CustomEvent:class{constructor(type,args){this.type=type;this.detail=args.detail}}};vm.createContext(c);vm.runInContext(fs.readFileSync(path.join(__dirname,'../actividades/puntos/game.js'),'utf8'),c);const run=s=>vm.runInContext(s,c);
+assert.equal(run('completed.length'),0);assert.equal(els['mouse-guide'].hidden,false);assert.equal(els['mouse-guide'].dataset.button,'0');assert.match(els['mouse-guide'].attrs['aria-label'],/izquierdo/);assert.equal(run('sound'),false);run('load(7)');assert.equal(run('level'),0);run("$('next').onclick()");assert.equal(run('level'),0);
+let totalPoints=0;
+for(let l=0;l<10;l++){
+assert(run(`unlocked(${l})`));run(`load(${l})`);const sequence=l<2?'normal':l<4?'odd':l<7?'three':'four';assert.equal(run('LEVELS[level].sequence'),sequence);
+const total=run('LEVELS[level].points.length');totalPoints+=total;const numbers=Array.from({length:total},(_,i)=>sequence==='normal'?i+1:sequence==='odd'?i*2+1:sequence==='three'?(i+1)*3:(i+1)*4);assert.equal(new Set(numbers).size,total);
+for(let i=0;i<total;i++){
+assert.equal(run('numberAt(step)'),numbers[i]);assert.equal(Number(els.number.textContent),numbers[i]);assert.match(els.dots.children[i].attrs['aria-label'],new RegExp(`Punto ${numbers[i]},`));
+const btn=run('requiredButton()');assert.equal(els['mouse-guide'].hidden,false);assert.equal(els['mouse-guide'].dataset.button,String(btn));assert.match(els['guide-label'].textContent,btn===2?/derecho/:/izquierdo/);
+run(`pick(${i},${btn===0?2:0})`);assert.equal(run('step'),i);if(i+1<total){run(`pick(${i+1},${btn})`);assert.equal(run('step'),i);}
+if(btn===2){let prevented=false;els.dots.children[i].oncontextmenu({preventDefault(){prevented=true}});assert(prevented);}else els.dots.children[i].onclick({button:0});assert.equal(run('step'),i+1);
+}
+assert.equal(run('finished'),true);assert.equal(els.celebration.hidden,false);assert.equal(els['mouse-guide'].hidden,false);assert.equal(els['mouse-guide'].dataset.button,'done');assert.equal(events.at(-1).type,'os2-puntos:completed');assert.equal(events.at(-1).detail.sequence,sequence);assert.equal(events.at(-1).detail.lastNumber,numbers.at(-1));assert.equal(events.at(-1).detail.errors,total*2-1);assert.equal(events.at(-1).detail.attempts,total*3-1);
+}
+assert.equal(events.length,10);assert.equal(JSON.parse(store['os2-puntos-v1']).length,10);assert.equal(store['punto-magico-v1'],'[0,1,2]');run('load(4)');assert.equal(run('step'),0);assert.equal(els.number.textContent,3);els.dots.children[0].onkeydown({key:'Enter',shiftKey:false,preventDefault(){}});assert.equal(run('step'),1);assert.equal(els.number.textContent,6);els.dots.children[1].onkeydown({key:'Enter',shiftKey:true,preventDefault(){}});assert.equal(run('step'),2);assert.equal(els.number.textContent,9);
+run("$('mode').value='expert';drawDots()");assert.equal(els['mouse-guide'].hidden,false);assert.equal(els.dots.children.length,run('LEVELS[level].points.length'));
+console.log(`PASS: ${totalPoints} puntos en 10 dibujos; series consecutivas, impares, 3 y 4; LED desde inicio, botón derecho real, alternancia, teclado, errores sin avance, desbloqueos, reinicio y progreso separado de OS1.`);
